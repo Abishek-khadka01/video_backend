@@ -1,7 +1,7 @@
 import logger from "../utils/logger.js"
 import jwt from "jsonwebtoken"
 import { options } from "../user.controller.js";
-const AuthMiddleware = async (req,res,next)=>{
+ export const AuthMiddleware = async (req,res,next)=>{
 
     try {
         const {accessToken , refreshToken} = req.cookies;

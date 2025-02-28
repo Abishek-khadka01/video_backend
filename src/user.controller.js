@@ -1,7 +1,7 @@
 import { User } from "./user.models.js";
 import logger from "./utils/logger.js";
 import { UserRegisterValidator, UserLoginValidator } from "./user.validator.js";
-
+import fs from "fs"
 
 
  export const options ={
@@ -113,6 +113,7 @@ const UserLogin = async(req , res)=>{
                 refreshToken
             },
             user : {
+                _id: findUser._id,
                 username : findUser.username,
                 email : findUser.email
             }
@@ -223,3 +224,49 @@ const UserDetails = async (req,res)=>{
 }
 
 
+const AddProfile = async(req , res)=>{
+
+    try {
+      
+        const {user} = req;
+        const {file } = req;
+
+        const findUser = await User.findById(user); 
+        if(!findUser){
+            logger.warn(`No user found , login again`);
+            return res.status(400).json({
+                success: false,
+                message : "No user found , login again"
+            })
+        }
+
+        const Cloudinary_Url = await UploadOnCloudinary(file.path);
+        const userUpdate = await User.findOneAndUpdate({
+            _id : user
+        },{
+            profile : Cloudinary_Url
+        },{new : true})
+        
+     fs.unlinkSync(file.path);    
+        return res.status(200).json({
+            success: true,
+            message : "Profile added successfully",
+            data : {
+                user : userUpdate
+            }
+        })       
+
+    } catch (error) {
+        logger.error( `Error in adding the profile ${error.message}`)
+        return res.status(500).json({
+            success: false,
+            message : error.message
+    })
+
+
+
+}
+
+}
+
+export {UserRegister , UserLogin , UserLogOut , UserDetails, AddProfile}

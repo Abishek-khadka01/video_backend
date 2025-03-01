@@ -77,11 +77,16 @@ io.on("connection", async (socket) => {
 
   logger.info(`User with id ${id} is connected to the socket`);
 
+  socket.on("hello", (data) => {
+    console.log(data);
+    io.emit("hello", { message: "hello from server}" });
+  });
+
   socket.on("disconnect", () => {
     logger.info(`User with id ${id} is disconnected to the socket`);
     MapIdAndSocket.delete(id);
     MapSocketAndId.delete(socket.id);
-    // redis.lrem("onlineUsers", 0, id);
+    redis.lrem("onlineUsers", 0, id);
   });
 });
 

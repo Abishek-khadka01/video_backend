@@ -1,5 +1,5 @@
 import {v2 as cloudinary} from 'cloudinary';
-import logger from "./Logger.js"
+import logger from './logger.js';
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -8,7 +8,7 @@ cloudinary.config({
 
 
 
-const uploadProfile = async (filepath)=>{
+ export const uploadProfile = async (filepath)=>{
     try {
             const result =  await cloudinary.uploader.upload(filepath, {
                 folder: 'profile'

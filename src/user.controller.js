@@ -2,13 +2,21 @@ import { User } from "./user.models.js";
 import logger from "./utils/logger.js";
 import { UserRegisterValidator, UserLoginValidator } from "./user.validator.js";
 import fs from "fs"
-
+import { uploadProfile } from "./utils/cloudinary.js";
+import { OnlineUsers , MapIdAndSocket,MapSocketAndId} from "./server.js";
 
  export const options ={
-    secure : true,
-    httpOnly : true,
-    sameSite : "none",
-    maxAge : 1000 * 60 * 60 * 24 * 7
+    
+    httpOnly : false,
+    sameSite : "None",
+    maxAge : 1000 * 60 * 60 * 24 * 7,
+    secure: true,
+    path:"/",
+    domain : "localhost"
+
+
+    
+
 
 }
 
@@ -18,12 +26,14 @@ const UserRegister = async(req , res)=>{
 
     try {
         logger.info(`The User Register API is called with ${req.body}`);
-        const validate = UserRegisterValidator.validate(req.body);
+        const validate = UserRegisterValidator.validate(JSON.parse(JSON.stringify(req.body)));
         if(validate.error){
+            logger.warn(`Error in the validation ${validate.error.message}`);
             return res.status(400).json({
                 success : false,
                 message: validate.error.message});
         }
+        logger.info(`The validation is passed`)
         const {username , email , password} = req.body;
         // check if the user already exists in the database
         const userfind =  await User.findOne({
@@ -37,7 +47,7 @@ const UserRegister = async(req , res)=>{
             }
 
         const user = await User.create({
-            username,
+             name :username,
             email,
             password
         })
@@ -66,6 +76,7 @@ const UserLogin = async(req , res)=>{
     try {
             const validate = UserLoginValidator.validate(req.body);
             if(validate.error){
+                logger.warn(`Error in the validation ${validate.error.message}`);
                 return res.status(400).json({
                     success : false,
                     message: validate.error.message});
@@ -74,7 +85,7 @@ const UserLogin = async(req , res)=>{
         const {email , password} = req.body;
         
 
-
+            logger.info(`The User Login API is called with ${req.body}`);
         // find User 
         const findUser = await User.findOne({
             email
@@ -101,10 +112,11 @@ const UserLogin = async(req , res)=>{
 
         const refreshToken = findUser.generateRefreshToken();
         const accessToken = findUser.generateAccessToken();
+        logger.info(`Access Token : ${accessToken} and Refresh Token : ${refreshToken}`);
 
         res.cookie("refreshToken", refreshToken, options)
         .cookie("accessToken", accessToken, {...options, maxAge : 1000 * 60 * 15})  // 15 minutes
-
+        logger.info(`Cookies are set and the user is logged in `);
         return res.status(200).json({
             success : true,
             message: "User logged in successfully",
@@ -114,8 +126,9 @@ const UserLogin = async(req , res)=>{
             },
             user : {
                 _id: findUser._id,
-                username : findUser.username,
-                email : findUser.email
+                username : findUser.name,
+                email : findUser.email,
+                profile : findUser.profile
             }
         });
 
@@ -240,7 +253,7 @@ const AddProfile = async(req , res)=>{
             })
         }
 
-        const Cloudinary_Url = await UploadOnCloudinary(file.path);
+        const Cloudinary_Url = await uploadProfile(file.path);
         const userUpdate = await User.findOneAndUpdate({
             _id : user
         },{
@@ -269,4 +282,68 @@ const AddProfile = async(req , res)=>{
 
 }
 
-export {UserRegister , UserLogin , UserLogOut , UserDetails, AddProfile}
+
+
+
+const onlineUsersSocket = async (req,res)=>{
+
+    try {
+
+        const {user} = req;
+        const findUser = await User.findById(user);
+        if(!user || !findUser){
+            logger.warn(`User is not logged in`);
+            return res.status(400).json({
+                success : false,
+                message: "User is not logged in"});
+        }
+
+// this consists of all the mongoose.documentId of the online users
+
+            let socketIds = Array.from(OnlineUsers)
+            logger.info(`The aray of socket ids are ${socketIds}`); 
+            let online_Users = socketIds.map((id)=>MapSocketAndId.get(id))   
+            logger.info(`The aray of online users are ${online_Users}`);         
+            let getDocuments = []; // Get Documents consists of the user from the database
+            console.log(online_Users)
+            for(let i=0;i<online_Users.length;i++){
+                let user = await User.findById(online_Users[i]);
+                getDocuments.push(user);
+            }
+ 
+
+                console.log(getDocuments)
+            if(getDocuments.length === 0){
+                logger.warn(`No online users found`);
+                return res.status(400).json({
+                    success : false,
+                    message: "No online users found"});
+                    onlineUsers = getDocuments
+            }
+            logger.info(`Online users are ${getDocuments}`);
+            return res.status(200).json({
+                success : true,
+                message: "Online users found",
+                onlineUsers : getDocuments
+            })
+
+    } catch (error) {
+        logger.error(`Error in giving the online users ${error.message} `)
+        return res.status(500).json({
+            success: false,
+            message : error.message
+        })
+    }
+
+
+
+}
+
+
+
+
+
+
+
+
+export {UserRegister , UserLogin , UserLogOut , UserDetails, AddProfile, onlineUsersSocket}

@@ -167,8 +167,10 @@ const UserLogOut = async (req, res) => {
 
 const UserDetails = async (req, res) => {
   try {
+    logger.info(`The User Details API is called`);
     const { user } = req;
     const { id } = req.params;
+    console.log(`The id received from params is ${id}`);
 
     if (!id) {
       logger.warn(`User id is not provided`);
@@ -201,8 +203,10 @@ const UserDetails = async (req, res) => {
       success: true,
       message: "User details found",
       data: {
-        username: userDetails.username,
+        username: userDetails.name,
         email: userDetails.email,
+        profile: userDetails.profile,
+        _id: userDetails._id,
       },
     });
   } catch (error) {
@@ -290,7 +294,7 @@ const onlineUsersSocket = async (req, res) => {
       _id: {
         $in: FilterUsers,
       },
-    }).select("name email profile");
+    }).select(" _id name email profile");
 
     logger.info(`The online users details are ${onlineUsersDetails}`);
 

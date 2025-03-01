@@ -46,49 +46,6 @@ const io = new Server(httpServer, {
 });
 
 // Adding the io middleware to the app
-io.use(async (socket, next) => {
-  const { id } = socket.handshake.query;
-  console.log(id);
-  //check if the user is authenticated
-  const findUser = await User.findById(id);
-  if (!id || !findUser) {
-    logger.warn(`Not authenticated user is trying to connect with socket id`);
-    return next(new Error("Not authenticated"));
-  }
-  logger.info(
-    `User with id ${id} is connected to the socket, ${findUser.name}`
-  );
-  socket.id = id;
-  next();
-});
-
-io.on("connection", async (socket) => {
-  const { id } = socket;
-  MapIdAndSocket.set(id, socket.id);
-  MapSocketAndId.set(socket.id, id);
-
-  const onlineUsers = await redis.lrange("onlineUsers", 0, -1);
-  if (!onlineUsers.includes(id)) {
-    await redis.lpush("onlineUsers", id);
-    logger.info(`User with id ${id} is added to the online users list`);
-  } else {
-    console.log("User is already exists.");
-  }
-
-  logger.info(`User with id ${id} is connected to the socket`);
-
-  socket.on("hello", (data) => {
-    console.log(data);
-    io.emit("hello", { message: "hello from server}" });
-  });
-
-  socket.on("disconnect", () => {
-    logger.info(`User with id ${id} is disconnected to the socket`);
-    MapIdAndSocket.delete(id);
-    MapSocketAndId.delete(socket.id);
-    redis.lrem("onlineUsers", 0, id);
-  });
-});
 
 await ConnectToDatabase();
 

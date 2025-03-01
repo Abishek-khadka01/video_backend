@@ -6,7 +6,7 @@ import { User } from "../user.models.js";
 export const AuthMiddleware = async (req, res, next) => {
   try {
     logger.info(`Auth Middleware is called`);
-
+    console.log(req.cookies);
     const { accessToken, refreshToken } = req.cookies;
 
     if (!accessToken && !refreshToken) {

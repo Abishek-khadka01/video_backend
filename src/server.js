@@ -46,7 +46,89 @@ const io = new Server(httpServer, {
 });
 
 // Adding the io middleware to the app
+io.use(async (socket, next) => {
+  const { id } = socket.handshake.auth;
+  console.log(id);
+  //check if the user is authenticated
+  const findUser = await User.findById(id);
+  if (!id || !findUser) {
+    logger.warn(`Not authenticated user is trying to connect with socket id`);
+    return next(new Error("Not authenticated"));
+  }
+  logger.info(
+    `User with id ${id} is connected to the socket, ${findUser.name}`
+  );
+  socket.id = id;
+  next();
+});
 
+io.on("connection", async (socket) => {
+  const { id } = socket;
+  MapIdAndSocket.set(id, socket.id);
+  MapSocketAndId.set(socket.id, id);
+
+  const onlineUsers = await redis.lrange("onlineUsers", 0, -1);
+  if (!onlineUsers.includes(id)) {
+    await redis.lpush("onlineUsers", id);
+    logger.info(`User with id ${id} is added to the online users list`);
+  } else {
+    console.log("User is already exists.");
+  }
+
+  logger.info(`User with id ${id} is connected to the socket`);
+
+  socket.on("initialize-call", ({ to, offer, successUrl }) => {
+    console.log(`initialize call is called`);
+    const socketId = MapIdAndSocket.get(to);
+    console.log(`Socket id of the receiver is ${socketId}`);
+    console.log(offer);
+    socket.to(socketId).emit("incoming-callrequest", {
+      from: socket.id,
+      userId: to,
+      offer,
+      successUrl,
+    });
+  });
+
+  socket.on("answer-call", ({ from, to, answer }) => {
+    console.log(
+      `The answer received from the user is ${JSON.stringify(answer)}`
+    );
+    const fromSocketId = MapIdAndSocket.get(from);
+    const toSocketId = MapIdAndSocket.get(to);
+    console.log(answer);
+
+    socket.to(toSocketId).emit("accept-callrequest", {
+      from,
+      answer,
+    });
+  });
+
+  socket.on("reject-call", ({ from, to }) => {
+    const toSocketId = MapIdAndSocket(to);
+    socket.to(toSocketId).emit("rejection", {
+      message: "Call ended ",
+    });
+  });
+
+  socket.on("ended-call", ({ from, to, message }) => {
+    console.log(`The userid received for end call is ${to}`);
+    console.log(`End call was triggered`);
+    const toSocketId = MapIdAndSocket.get(to);
+    console.log(`The socketID of that user is ${toSocketId}`);
+    console.log(message);
+    socket.to(toSocketId).emit("end-call-success", {
+      from,
+      message,
+    });
+  });
+  socket.on("disconnect", () => {
+    logger.info(`User with id ${id} is disconnected to the socket`);
+    MapIdAndSocket.delete(id);
+    MapSocketAndId.delete(socket.id);
+    redis.lrem("onlineUsers", 0, id);
+  });
+});
 await ConnectToDatabase();
 
 // import all the routes

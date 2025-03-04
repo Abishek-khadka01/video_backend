@@ -47,65 +47,79 @@ const io = new Server(httpServer, {
 
 // Adding the io middleware to the app
 io.use(async (socket, next) => {
-  const { id } = socket.handshake.auth;
-  console.log(id);
+  const { userID } = socket.handshake.auth;
+  console.log(userID);
   //check if the user is authenticated
-  const findUser = await User.findById(id);
-  if (!id || !findUser) {
+  const findUser = await User.findById(userID);
+  if (!userID || !findUser) {
     logger.warn(`Not authenticated user is trying to connect with socket id`);
     return next(new Error("Not authenticated"));
   }
   logger.info(
-    `User with id ${id} is connected to the socket, ${findUser.name}`
+    `User with id ${userID} is connected to the socket, ${findUser.name}`
   );
-  socket.id = id;
+  socket.userID = userID;
   next();
 });
 
 io.on("connection", async (socket) => {
-  const { id } = socket;
-  MapIdAndSocket.set(id, socket.id);
-  MapSocketAndId.set(socket.id, id);
+  const { userID } = socket;
+  logger.warn(userID, socket.id);
+  MapIdAndSocket.set(userID, socket.id);
+  MapSocketAndId.set(socket.id, userID);
 
   const onlineUsers = await redis.lrange("onlineUsers", 0, -1);
-  if (!onlineUsers.includes(id)) {
-    await redis.lpush("onlineUsers", id);
-    logger.info(`User with id ${id} is added to the online users list`);
+  if (!onlineUsers.includes(userID)) {
+    await redis.lpush("onlineUsers", userID);
+    logger.info(`User with id ${userID} is added to the online users list`);
   } else {
     console.log("User is already exists.");
   }
 
-  logger.info(`User with id ${id} is connected to the socket`);
+  logger.info(`User with id ${userID} is connected to the socket`);
 
   socket.on("initialize-call", ({ to, offer, successUrl }) => {
     console.log(`initialize call is called`);
+    logger.error(`the to is ${to}`);
     const socketId = MapIdAndSocket.get(to);
-    console.log(`Socket id of the receiver is ${socketId}`);
+    const getUserId = MapSocketAndId.get(socket.id);
+    logger.warn(
+      ` The socket id is ${socket.id} and the getUser id is ${getUserId} `
+    );
+
     console.log(offer);
     socket.to(socketId).emit("incoming-callrequest", {
-      from: socket.id,
-      userId: to,
+      from: getUserId,
       offer,
       successUrl,
     });
   });
 
-  socket.on("answer-call", ({ from, to, answer }) => {
-    console.log(
-      `The answer received from the user is ${JSON.stringify(answer)}`
+  socket.on("answer-call", async ({ from, to, answer }) => {
+    const findUser1 = await User.findById(from); // the receiver id
+    const findUser2 = await User.findById(to); // call initiator id
+    logger.error(
+      `The call is answered by ${findUser1.name}  and the call initiator is ${findUser2.name}`
     );
-    const fromSocketId = MapIdAndSocket.get(from);
-    const toSocketId = MapIdAndSocket.get(to);
-    console.log(answer);
 
-    socket.to(toSocketId).emit("accept-callrequest", {
+    
+    const fromSocketId = MapIdAndSocket.get(from);
+    console.log(`The result is ${fromSocketId}`);
+    logger.error(
+      `the userid of from is ${fromSocketId} and socketID is ${fromSocketId}`
+    );
+
+    const toSocketId = MapIdAndSocket.get(to);
+    logger.error(`The receiver id is ${to} and the socketId is ${toSocketId}`);
+
+    socket.to(toSocketId).emit("hello-accept-call", {
       from,
       answer,
     });
   });
 
   socket.on("reject-call", ({ from, to }) => {
-    const toSocketId = MapIdAndSocket(to);
+    const toSocketId = MapIdAndSocket.get(to);
     socket.to(toSocketId).emit("rejection", {
       message: "Call ended ",
     });
@@ -123,10 +137,10 @@ io.on("connection", async (socket) => {
     });
   });
   socket.on("disconnect", () => {
-    logger.info(`User with id ${id} is disconnected to the socket`);
-    MapIdAndSocket.delete(id);
+    logger.info(`User with id ${userID} is disconnected to the socket`);
+    MapIdAndSocket.delete(userID);
     MapSocketAndId.delete(socket.id);
-    redis.lrem("onlineUsers", 0, id);
+    redis.lrem("onlineUsers", 0, userID);
   });
 });
 await ConnectToDatabase();
@@ -134,6 +148,7 @@ await ConnectToDatabase();
 // import all the routes
 
 import { UserRouter } from "./user.routes.js";
+import { UserRegisterValidator } from "./user.validator.js";
 
 app.use("/user", UserRouter);
 
